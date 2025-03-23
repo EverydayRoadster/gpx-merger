@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 
 	"github.com/tkrajina/gpxgo/gpx"
@@ -23,6 +24,59 @@ func check(e error) {
 		fmt.Println(e.Error())
 		panic(e)
 	}
+}
+
+type GpxNameParseData struct {
+	Ele       float64
+	Countries string
+	Name      string
+}
+
+var patterns = map[string]*regexp.Regexp{
+	"paesse.info": regexp.MustCompile(`^(?P<Ele>\d+) - (?P<Countries>[A-Z-]+) - (?P<Name>.+)$`),
+	"other":       regexp.MustCompile(`^(?P<Name>.+)$`),
+}
+
+func parseGpxName(text string) (*GpxNameParseData, error) {
+	for _, re := range patterns {
+		match := re.FindStringSubmatch(text)
+		if match != nil {
+			result := &GpxNameParseData{}
+			groups := make(map[string]string)
+			for i, name := range re.SubexpNames() {
+				if i != 0 && name != "" {
+					groups[name] = match[i]
+				}
+			}
+			result.Countries = groups["Countries"]
+			result.Name = groups["Name"]
+			ele, err := strconv.ParseFloat(groups["Ele"], 64)
+			result.Ele = ele
+			return result, err
+		}
+	}
+	return nil, fmt.Errorf("no matching pattern found for: %s", text)
+}
+
+func readGpxFile(filename string) (*gpx.GPX, error) {
+	var gpxFile *gpx.GPX
+	payloadMaster, err := os.ReadFile(filename)
+	if err == nil {
+		gpxFile, err = gpx.ParseBytes(payloadMaster)
+	}
+	for i := range gpxFile.Waypoints {
+		nameParseData, _ := parseGpxName(gpxFile.Waypoints[i].Name)
+		if nameParseData != nil {
+			gpxFile.Waypoints[i].Name = nameParseData.Name
+			if nameParseData.Ele > 0 {
+				gpxFile.Waypoints[i].Elevation.SetValue(nameParseData.Ele)
+			}
+			if len(nameParseData.Countries) > 0 {
+				gpxFile.Waypoints[i].Name += " (" + nameParseData.Countries + ")"
+			}
+		}
+	}
+	return gpxFile, err
 }
 
 // const metersPerDegree = 111000.0 // Approx. 111 km per degree of latitude
@@ -88,15 +142,6 @@ func main() {
 	filenameOutMaster := os.Args[3]
 	err = os.WriteFile(filenameOutMaster, xmlBytes, 0666)
 	check(err)
-}
-
-func readGpxFile(filename string) (*gpx.GPX, error) {
-	var gpxFile *gpx.GPX
-	payloadMaster, err := os.ReadFile(filename)
-	if err == nil {
-		gpxFile, err = gpx.ParseBytes(payloadMaster)
-	}
-	return gpxFile, err
 }
 
 type ElevationResponse struct {
