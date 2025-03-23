@@ -32,11 +32,13 @@ type GpxNameParseData struct {
 	Name      string
 }
 
+// kown patterns for sites offering GPX POI downloads
 var patterns = map[string]*regexp.Regexp{
 	"paesse.info": regexp.MustCompile(`^(?P<Ele>\d+) - (?P<Countries>[A-Z-]+) - (?P<Name>.+)$`),
 	"other":       regexp.MustCompile(`^(?P<Name>.+)$`),
 }
 
+// parse the name into regex groups where possible, decompose groups into data
 func parseGpxName(text string) (*GpxNameParseData, error) {
 	for _, re := range patterns {
 		match := re.FindStringSubmatch(text)
@@ -58,6 +60,7 @@ func parseGpxName(text string) (*GpxNameParseData, error) {
 	return nil, fmt.Errorf("no matching pattern found for: %s", text)
 }
 
+// read a GPX file. parse the name of waypoint for known pattern, to derive elevetion data from it and make names a bit more consistent
 func readGpxFile(filename string) (*gpx.GPX, error) {
 	var gpxFile *gpx.GPX
 	payloadMaster, err := os.ReadFile(filename)
@@ -79,15 +82,19 @@ func readGpxFile(filename string) (*gpx.GPX, error) {
 	return gpxFile, err
 }
 
-// const metersPerDegree = 111000.0 // Approx. 111 km per degree of latitude
+// grid resolution
 const gridSizeInDegree = 0.50
 
+// spatial grid
 type WaypointGrid map[string][]gpx.GPXPoint
 
+// compute a key for the grids, derive from grid resolution
 func GridKey(wp gpx.GPXPoint) string {
 	return fmt.Sprintf("%.2f,%.2f", math.Floor(wp.Latitude/gridSizeInDegree), math.Floor(wp.Longitude/gridSizeInDegree))
 }
 
+// load a spatial grid. this limits the number of distance checks to be made.
+// TODO: overlay grid for overlap points
 func LoadGrid(waypoints []gpx.GPXPoint) WaypointGrid {
 	grid := make(WaypointGrid)
 	for _, wp := range waypoints {
@@ -144,10 +151,13 @@ func main() {
 	check(err)
 }
 
+// mapping the REST API call response to data
 type ElevationResponse struct {
 	Elevation []float64 `json:"elevation"`
 }
 
+// resolves the elevation for a given geo-coordinate, at a rought 90m resolution right now.
+// the lookup calls are limited in number, please check wbsite for current limits
 func CheckElevation(wp *gpx.GPXPoint) error {
 	response, err := http.Get("https://api.open-meteo.com/v1/elevation?latitude=" + fmt.Sprintf("%f", wp.Point.Latitude) + "&longitude=" + fmt.Sprintf("%f", wp.Point.Longitude))
 	if err == nil {
