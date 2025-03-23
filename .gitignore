@@ -19,3 +19,6 @@
 
 # Go workspace file
 go.work
+*.gpx
+.vscode/launch.json
+.DS_Store
