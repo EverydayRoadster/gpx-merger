@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 
 	"github.com/tkrajina/gpxgo/gpx"
@@ -33,9 +34,11 @@ type GpxNameParseData struct {
 }
 
 // kown patterns for sites offering GPX POI downloads
+// TODO: refactor out into a config file
 var patterns = map[string]*regexp.Regexp{
-	"paesse.info": regexp.MustCompile(`^(?P<Ele>\d+) - (?P<Countries>[A-Z-]+) - (?P<Name>.+)$`),
-	"other":       regexp.MustCompile(`^(?P<Name>.+)$`),
+	"paesse.info":  regexp.MustCompile(`^(?<Ele>0*\d+) - (?<Countries>[A-Z-]+) - (?<Name>.+)$`),
+	"paesse.info/": regexp.MustCompile(`^(?<Ele>\d+) - (?<Countries>[A-Z-]+) - (?<Name>.+)$`),
+	"other":        regexp.MustCompile(`^(?<Name>.+)$`),
 }
 
 // parse the name into regex groups where possible, decompose groups into data
@@ -82,27 +85,7 @@ func readGpxFile(filename string) (*gpx.GPX, error) {
 	return gpxFile, err
 }
 
-// grid resolution
-const gridSizeInDegree = 0.50
-
-// spatial grid
-type WaypointGrid map[string][]gpx.GPXPoint
-
-// compute a key for the grids, derive from grid resolution
-func GridKey(wp gpx.GPXPoint) string {
-	return fmt.Sprintf("%.2f,%.2f", math.Floor(wp.Latitude/gridSizeInDegree), math.Floor(wp.Longitude/gridSizeInDegree))
-}
-
-// load a spatial grid. this limits the number of distance checks to be made.
-// TODO: overlay grid for overlap points
-func LoadGrid(waypoints []gpx.GPXPoint) WaypointGrid {
-	grid := make(WaypointGrid)
-	for _, wp := range waypoints {
-		key := GridKey(wp)
-		grid[key] = append(grid[key], wp)
-	}
-	return grid
-}
+const gridSizeInDegree = float64(0.5)
 
 func main() {
 	if len(os.Args) < 5 {
@@ -114,13 +97,58 @@ func main() {
 	gpxFileSlave, err := readGpxFile(os.Args[2])
 	check(err)
 
-	grid := LoadGrid(gpxFileMaster.Waypoints)
-
 	maxDistance, err := strconv.ParseFloat(os.Args[4], 64)
 	check(err)
 
+	grid := LoadGrid(gpxFileMaster.Waypoints, gridSizeInDegree)
+	grid.AddGPX(gpxFileSlave, gridSizeInDegree, maxDistance)
+
+	gpxFileMaster.Waypoints = make([]gpx.GPXPoint, 0)
+	for _, waypoints := range grid {
+		for _, wp := range waypoints {
+			if wp.Elevation.Null() {
+				CheckElevation(&wp)
+			}
+			gpxFileMaster.Waypoints = append(gpxFileMaster.Waypoints, wp)
+		}
+	}
+
+	grid.SubstractCloseby(gpxFileMaster, gridSizeInDegree, maxDistance)
+
+	// write results
+	// TODO file handling with default to master
+	// TODO automated split into regions?
+	xmlBytes, err := gpxFileMaster.ToXml(gpx.ToXmlParams{Version: "1.1", Indent: true})
+	check(err)
+	filenameOutMaster := os.Args[3]
+	err = os.WriteFile(filenameOutMaster, xmlBytes, 0666)
+	check(err)
+}
+
+// spatial grid
+type WaypointGrid map[string][]gpx.GPXPoint
+
+// compute a key for the grids, derive from grid resolution
+func GridKey(wp gpx.GPXPoint, gridSizeInDegree float64) string {
+	return fmt.Sprintf("%.2f,%.2f", math.Floor(wp.Latitude/gridSizeInDegree), math.Floor(wp.Longitude/gridSizeInDegree))
+}
+
+// load a spatial grid. this limits the number of distance checks to be made.
+// TODO: overlay grid for overlap points
+func LoadGrid(waypoints []gpx.GPXPoint, gridSizeInDegree float64) WaypointGrid {
+	grid := make(WaypointGrid)
+	for _, wp := range waypoints {
+		key := GridKey(wp, gridSizeInDegree)
+		grid[key] = append(grid[key], wp)
+	}
+	return grid
+}
+
+// add  point to a grid cell, but only if not close distance to another
+// to avoid closeby to a waypoiint in a neighboring cell, those must be looked into as well
+func (grid WaypointGrid) AddGPX(gpxFileSlave *gpx.GPX, gridSizeInDegree float64, maxDistance float64) {
 	for _, slaveWaypoint := range gpxFileSlave.Waypoints {
-		key := GridKey(slaveWaypoint)
+		key := GridKey(slaveWaypoint, gridSizeInDegree)
 		slaveWpIsCloseby := false
 		for _, gridWaypoint := range grid[key] {
 			if slaveWaypoint.Distance2D(&gridWaypoint) < maxDistance {
@@ -132,23 +160,51 @@ func main() {
 			grid[key] = append(grid[key], slaveWaypoint)
 		}
 	}
+}
 
-	gpxFileMaster.Waypoints = make([]gpx.GPXPoint, 0)
-
-	for _, waypoints := range grid {
-		for _, wp := range waypoints {
-			if wp.Elevation.Null() {
-				CheckElevation(&wp)
+func (grid WaypointGrid) SubstractCloseby(gpxFile *gpx.GPX, gridSizeInDegree float64, maxDistance float64) {
+	deleteIndex := make([]int, 0)
+	for i := range gpxFile.Waypoints {
+		for _, key := range NeighboringGridKeys(gpxFile.Waypoints[i], gridSizeInDegree, maxDistance) {
+			gridWpIsCloseby := false
+			for _, gridWaypoint := range grid[key] {
+				if !(gpxFile.Waypoints[i].Name == gridWaypoint.Name && gpxFile.Waypoints[i].Latitude == gridWaypoint.Latitude && gpxFile.Waypoints[i].Longitude == gridWaypoint.Longitude) {
+					if gpxFile.Waypoints[i].Distance2D(&gridWaypoint) < maxDistance {
+						gridWpIsCloseby = true
+						break
+					}
+				}
 			}
-			gpxFileMaster.Waypoints = append(gpxFileMaster.Waypoints, wp)
+			if gridWpIsCloseby {
+				deleteIndex = append(deleteIndex, i) //				remove gpxFile.Waypoints[i] from list
+			}
 		}
 	}
+	slices.Sort(deleteIndex)
+	for _, index := range deleteIndex {
+		gpxFile.Waypoints = append(gpxFile.Waypoints[:index], gpxFile.Waypoints[index+1:]...)
+	}
+}
 
-	xmlBytes, err := gpxFileMaster.ToXml(gpx.ToXmlParams{Version: "1.1", Indent: true})
-	check(err)
-	filenameOutMaster := os.Args[3]
-	err = os.WriteFile(filenameOutMaster, xmlBytes, 0666)
-	check(err)
+const metersPerDegree = float64(111000.0)
+
+func NeighboringGridKeys(wp gpx.GPXPoint, gridSizeInDegree float64, maxDistance float64) []string {
+	result := make([]string, 0)
+	origLat := wp.Latitude
+	origLon := wp.Longitude
+	diff := maxDistance / metersPerDegree
+
+	for x := -1; x <= 1; x++ {
+		for y := -1; y <= 1; y++ {
+			wp.Latitude = origLat + (float64(x) * diff)
+			wp.Longitude = origLon + (float64(y) * diff)
+			key := GridKey(wp, gridSizeInDegree)
+			if !slices.Contains(result, key) {
+				result = append(result, key)
+			}
+		}
+	}
+	return result
 }
 
 // mapping the REST API call response to data
