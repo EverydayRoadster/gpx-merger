@@ -19,8 +19,8 @@ import (
 )
 
 func usage() {
-	fmt.Println("Merge two GPX files into one, but add points only when they are not close. Augment with rough elevation when missing.")
-	fmt.Println("Usage: go run . master.gpx addon.gpx newmaster.gpx mindistance[m]")
+	fmt.Println("Merge GPX files into one, starting off from a master GPX file. But add points only when they are not close to others. Augment point with rough elevation data in case missing. Config data is read from a file, too.")
+	fmt.Println("Usage: go run . master.gpx")
 	os.Exit(0)
 }
 
@@ -47,6 +47,26 @@ var config Config
 var patterns map[string]*regexp.Regexp
 var err error
 
+// load the config
+func loadConfig(configFileName string) error {
+	configFile, err := os.ReadFile(configFileName)
+	check(err)
+
+	err = yaml.Unmarshal(configFile, &config)
+	check(err)
+
+	// already compile regex patterns into global var
+	patterns = make(map[string]*regexp.Regexp)
+	for key, pattern := range config.Files {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return fmt.Errorf("invalid regex for %s: %v", key, err)
+		}
+		patterns[key] = re
+	}
+	return nil
+}
+
 type GpxNameParseData struct {
 	Ele       float64
 	Countries string
@@ -60,23 +80,25 @@ func parseGpxName(filename string, text string) (*GpxNameParseData, error) {
 	if re == nil {
 		re = patterns["default"]
 	}
-	match := re.FindStringSubmatch(text)
-	if match != nil {
-		result := &GpxNameParseData{}
-		groups := make(map[string]string)
-		for i, name := range re.SubexpNames() {
-			if i != 0 && name != "" {
-				groups[name] = match[i]
+	if re != nil {
+		match := re.FindStringSubmatch(text)
+		if match != nil {
+			result := &GpxNameParseData{}
+			groups := make(map[string]string)
+			for i, name := range re.SubexpNames() {
+				if i != 0 && name != "" {
+					groups[name] = match[i]
+				}
 			}
+			result.Countries = groups["Countries"]
+			result.Name = groups["Name"]
+			result.Prenom = groups["Prenom"]
+			if len(groups["Ele"]) > 0 {
+				ele, _ := strconv.ParseFloat(groups["Ele"], 64)
+				result.Ele = ele
+			}
+			return result, err
 		}
-		result.Countries = groups["Countries"]
-		result.Name = groups["Name"]
-		result.Prenom = groups["Prenom"]
-		if len(groups["Ele"]) > 0 {
-			ele, _ := strconv.ParseFloat(groups["Ele"], 64)
-			result.Ele = ele
-		}
-		return result, err
 	}
 	return nil, fmt.Errorf("no matching pattern found for: %s", text)
 }
@@ -94,33 +116,13 @@ func readGpxFile(inputDir string, filename string) (*gpx.GPX, error) {
 		nameParseData, _ := parseGpxName(filename, gpxFile.Waypoints[i].Name)
 		if nameParseData != nil {
 			gpxFile.Waypoints[i].Name = strings.Trim(nameParseData.Prenom+" "+nameParseData.Name, " ")
-			if nameParseData.Ele > 0 {
+			if gpxFile.Waypoints[i].Elevation.Null() && nameParseData.Ele > 0 {
 				gpxFile.Waypoints[i].Elevation.SetValue(nameParseData.Ele)
 			}
 		}
 	}
 
 	return gpxFile, err
-}
-
-func loadConfig(configFileName string) (map[string]*regexp.Regexp, Config, error) {
-	configFile, err := os.ReadFile(configFileName)
-	check(err)
-
-	var config Config
-	err = yaml.Unmarshal(configFile, &config)
-	check(err)
-
-	fileRegexMap := make(map[string]*regexp.Regexp)
-
-	for key, pattern := range config.Files {
-		re, err := regexp.Compile(pattern)
-		if err != nil {
-			return nil, config, fmt.Errorf("invalid regex for %s: %v", key, err)
-		}
-		fileRegexMap[key] = re
-	}
-	return fileRegexMap, config, nil
 }
 
 // get a list of GPX files from input dir, excluding master and output file, in case those would be found in the same dir
@@ -131,7 +133,6 @@ func GetGPXFiles(inputDir string, master string, output string) ([]string, error
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Path %s DirEntry %s \n", path, d.Name())
 		if !d.IsDir() && filepath.Ext(d.Name()) == ".gpx" && path != master && path != output {
 			gpxFiles = append(gpxFiles, d.Name())
 		}
@@ -146,7 +147,7 @@ func main() {
 	if len(os.Args) < 2 {
 		usage()
 	}
-	patterns, config, err = loadConfig("gpx-merger.yaml")
+	err = loadConfig("gpx-merger.yaml")
 	check(err)
 
 	// GPX input files

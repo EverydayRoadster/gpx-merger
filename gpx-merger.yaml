@@ -11,5 +11,5 @@ inputFolder: "../GettingHigh/"
 minimumDistance: 600
 gridSizeInDegree: 0.5
 
-elevationLookup: true
+elevationLookup: false
 renderElevation: true
