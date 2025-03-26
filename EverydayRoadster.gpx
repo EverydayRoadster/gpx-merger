@@ -7,8 +7,13 @@
     <metadata>
         <name>EverydayRoadster's GettingHigh</name>
         <desc>High road points that are not found elsewhere, or with corrections to such points found elsewhere.</desc>
+        <copyright author="EverydayRoadster">
+          <year>2025</year>
+          <license>https://mit-license.org/</license>
+        </copyright>
         <author>
             <name>EverydayRoadster</name>
+            <link href="https://github.com/EverydayRoadster/gpx-merger" />
         </author>
         <time>2025-03-25T19:18:49.544Z</time>
     </metadata>
