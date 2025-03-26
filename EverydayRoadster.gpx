@@ -6,7 +6,7 @@
     xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v2" version="1.1" creator="EverydayRoadster">
     <metadata>
         <name>EverydayRoadster's GettingHigh</name>
-        <desc>High road points that are not found elsewhere, of with corrections to such points found elsewhere.</desc>
+        <desc>High road points that are not found elsewhere, or with corrections to such points found elsewhere.</desc>
         <author>
             <name>EverydayRoadster</name>
         </author>
