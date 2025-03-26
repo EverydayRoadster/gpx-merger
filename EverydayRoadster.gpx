@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<gpx xmlns:gpxtpx1="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" 
+    xmlns="http://www.topografix.com/GPX/1/1" 
+    xmlns:trp="http://www.garmin.com/xmlschemas/TripExtensions/v1" 
+    xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" 
+    xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v2" version="1.1" creator="EverydayRoadster">
+    <metadata>
+        <name>EverydayRoadster's GettingHigh</name>
+        <desc>High road points that are not found elsewhere, of with corrections to such points found elsewhere.</desc>
+        <author>
+            <name>EverydayRoadster</name>
+        </author>
+        <time>2025-03-25T19:18:49.544Z</time>
+    </metadata>
+    <wpt lat="47.6037629" lon="8.4376095">
+        <ele>605.0</ele>
+        <time>2025-03-25T19:03:02.147Z</time>
+        <name>Kalter Wangen</name>
+        <sym>Mountain</sym>
+        <type>Mountainpass</type>
+    </wpt>
+</gpx>

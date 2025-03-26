@@ -1,0 +1,15 @@
+master: "EverydayRoadster.gpx"
+files:
+  Paesse-Info-Tarred-Passes.gpx: "^(?P<Ele>0*\\d+)\\s-\\s(?P<Countries>[A-Z-]+?)\\s-\\s(?P<Name>.+)$"  
+  Paesse-Info-Tarred-Mountain-Roads-Dead-End.gpx: "^(?P<Ele>0*\\d+)\\s-\\s(?P<Countries>[A-Z-]+?)\\s-\\s(?P<Name>.+)$"  
+  alpenrouten.gpx: "^(?P<Name>.+), (?P<Prenom>.+)$"
+  poi_export.gpx: "^(?P<Name>.+)$"
+  default: "^(?P<Name>.+)$"
+
+inputFolder: "../GettingHigh/"
+
+minimumDistance: 600
+gridSizeInDegree: 0.5
+
+elevationLookup: true
+renderElevation: true

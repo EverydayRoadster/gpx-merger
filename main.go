@@ -4,14 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/tkrajina/gpxgo/gpx"
+	"gopkg.in/yaml.v3"
 )
 
 func usage() {
@@ -27,103 +31,169 @@ func check(e error) {
 	}
 }
 
+type Config struct {
+	MinimumDistance  float64           `yaml:"minimumDistance"`
+	GridSizeInDegree float64           `yaml:"gridSizeInDegree"`
+	MasterFile       string            `yaml:"master"`
+	Files            map[string]string `yaml:"files"`
+	InputFolder      string            `yaml:"inputFolder"`
+	OutputFolder     string            `yaml:"outputFolder"`
+	ElevationLookup  bool              `yaml:"elevationLookup"`
+	RenderElevation  bool              `yaml:"renderElevation"`
+	Regexp           map[string]regexp.Regexp
+}
+
+var config Config
+var patterns map[string]*regexp.Regexp
+var err error
+
 type GpxNameParseData struct {
 	Ele       float64
 	Countries string
 	Name      string
-}
-
-// kown patterns for sites offering GPX POI downloads
-// TODO: refactor out into a config file
-var patterns = map[string]*regexp.Regexp{
-	"paesse.info": regexp.MustCompile(`^(?<Ele>0*\d+)\s-\s(?<Countries>[A-Z-]+)\s-\s(?<Name>.+)$`),
-	//	"paesse.info/": regexp.MustCompile(`^(?<Ele>\d+) - (?<Countries>[A-Z-]+) - (?<Name>.+)$`),
-	"other": regexp.MustCompile(`^(?<Name>.+)$`),
+	Prenom    string
 }
 
 // parse the name into regex groups where possible, decompose groups into data
-func parseGpxName(text string) (*GpxNameParseData, error) {
-	for _, re := range patterns {
-		match := re.FindStringSubmatch(text)
-		if match != nil {
-			result := &GpxNameParseData{}
-			groups := make(map[string]string)
-			for i, name := range re.SubexpNames() {
-				if i != 0 && name != "" {
-					groups[name] = match[i]
-				}
+func parseGpxName(filename string, text string) (*GpxNameParseData, error) {
+	re := patterns[filename]
+	if re == nil {
+		re = patterns["default"]
+	}
+	match := re.FindStringSubmatch(text)
+	if match != nil {
+		result := &GpxNameParseData{}
+		groups := make(map[string]string)
+		for i, name := range re.SubexpNames() {
+			if i != 0 && name != "" {
+				groups[name] = match[i]
 			}
-			result.Countries = groups["Countries"]
-			result.Name = groups["Name"]
-			ele, err := strconv.ParseFloat(groups["Ele"], 64)
-			result.Ele = ele
-			return result, err
 		}
+		result.Countries = groups["Countries"]
+		result.Name = groups["Name"]
+		result.Prenom = groups["Prenom"]
+		if len(groups["Ele"]) > 0 {
+			ele, _ := strconv.ParseFloat(groups["Ele"], 64)
+			result.Ele = ele
+		}
+		return result, err
 	}
 	return nil, fmt.Errorf("no matching pattern found for: %s", text)
 }
 
 // read a GPX file. parse the name of waypoint for known pattern, to derive elevetion data from it and make names a bit more consistent
-func readGpxFile(filename string) (*gpx.GPX, error) {
+func readGpxFile(inputDir string, filename string) (*gpx.GPX, error) {
 	var gpxFile *gpx.GPX
-	payloadMaster, err := os.ReadFile(filename)
+	payload, err := os.ReadFile(inputDir + filename)
 	if err == nil {
-		gpxFile, err = gpx.ParseBytes(payloadMaster)
+		gpxFile, err = gpx.ParseBytes(payload)
 	}
+	check(err)
 	for i := range gpxFile.Waypoints {
 		// in case of elevation data missing, this is worth parsing for that
-		if gpxFile.Waypoints[i].Elevation.Null() {
-			nameParseData, _ := parseGpxName(gpxFile.Waypoints[i].Name)
-			if nameParseData != nil {
-				gpxFile.Waypoints[i].Name = nameParseData.Name
-				if nameParseData.Ele > 0 {
-					gpxFile.Waypoints[i].Elevation.SetValue(nameParseData.Ele)
-				} else {
-					CheckElevation(&gpxFile.Waypoints[i])
-				}
-				if gpxFile.Waypoints[i].Elevation.NotNull() {
-					gpxFile.Waypoints[i].Name += " (" + strconv.FormatFloat(gpxFile.Waypoints[i].Elevation.Value(), 'f', 0, 64) + " m)"
-				}
+		nameParseData, _ := parseGpxName(filename, gpxFile.Waypoints[i].Name)
+		if nameParseData != nil {
+			gpxFile.Waypoints[i].Name = strings.Trim(nameParseData.Prenom+" "+nameParseData.Name, " ")
+			if nameParseData.Ele > 0 {
+				gpxFile.Waypoints[i].Elevation.SetValue(nameParseData.Ele)
 			}
 		}
 	}
+
 	return gpxFile, err
 }
 
-const gridSizeInDegree = float64(0.5)
+func loadConfig(configFileName string) (map[string]*regexp.Regexp, Config, error) {
+	configFile, err := os.ReadFile(configFileName)
+	check(err)
+
+	var config Config
+	err = yaml.Unmarshal(configFile, &config)
+	check(err)
+
+	fileRegexMap := make(map[string]*regexp.Regexp)
+
+	for key, pattern := range config.Files {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, config, fmt.Errorf("invalid regex for %s: %v", key, err)
+		}
+		fileRegexMap[key] = re
+	}
+	return fileRegexMap, config, nil
+}
+
+// get a list of GPX files from input dir, excluding master and output file, in case those would be found in the same dir
+func GetGPXFiles(inputDir string, master string, output string) ([]string, error) {
+	inputDir = strings.TrimRight(inputDir, " /") + "/"
+	var gpxFiles []string
+	err := filepath.WalkDir(inputDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Path %s DirEntry %s \n", path, d.Name())
+		if !d.IsDir() && filepath.Ext(d.Name()) == ".gpx" && path != master && path != output {
+			gpxFiles = append(gpxFiles, d.Name())
+		}
+		return nil
+	})
+	return gpxFiles, err
+}
+
 const metersPerDegree = float64(111000.0)
 
 func main() {
-	if len(os.Args) < 5 {
+	if len(os.Args) < 2 {
 		usage()
 	}
+	patterns, config, err = loadConfig("gpx-merger.yaml")
+	check(err)
+
 	// GPX input files
-	gpxMaster, err := readGpxFile(os.Args[1])
+	outputFile := os.Args[1]
+
+	gpxMaster, err := readGpxFile("", config.MasterFile)
 	check(err)
 	fmt.Printf("GPX Master: %d waypoints.\n", len(gpxMaster.Waypoints))
-	gpxAddon, err := readGpxFile(os.Args[2])
+	fmt.Printf("Spatial grid width : %f km, using Euclidean distance calculation!\n", config.GridSizeInDegree*metersPerDegree/1000)
 	check(err)
-	fmt.Printf("GPX Addon : %d waypoints.\n", len(gpxAddon.Waypoints))
+	fmt.Printf("Minimum distance between points : %f m.\n", config.MinimumDistance)
 
-	minDistance, err := strconv.ParseFloat(os.Args[4], 64)
-	check(err)
-	fmt.Printf("Minimum distance between points : %f m.\n", minDistance)
-
-	fmt.Printf("Spatial grid width : %f km, using Euclidean distance calculation!\n", gridSizeInDegree*metersPerDegree/1000)
-
-	grid := LoadGrid(gpxMaster.Waypoints, gridSizeInDegree)
+	grid := LoadGrid(gpxMaster.Waypoints, config.GridSizeInDegree)
 	fmt.Printf("Master spatial grid count : %d \n", len(grid))
 
-	grid.AddGPX(gpxAddon, gridSizeInDegree, minDistance)
-	fmt.Printf("+Addon spatial grid count : %d \n", len(grid))
+	gpxFiles, err := GetGPXFiles(config.InputFolder, config.MasterFile, outputFile)
+	check(err)
+	for _, gpxFile := range gpxFiles {
+		gpxAddon, err := readGpxFile(config.InputFolder, gpxFile)
+		check(err)
+		fmt.Printf("GPX Addon from %s: %d waypoints.\n", gpxFile, len(gpxAddon.Waypoints))
 
+		grid.AddGPX(gpxAddon, config.GridSizeInDegree, config.MinimumDistance)
+		fmt.Printf("+Addon spatial grid count : %d \n", len(grid))
+	}
 	// flatten the grid
 	gpxMaster.Waypoints = make([]gpx.GPXPoint, 0)
 	for _, waypoints := range grid {
 		gpxMaster.Waypoints = append(gpxMaster.Waypoints, waypoints...)
 	}
 	// cleanup
-	grid.SubstractCloseby(gpxMaster, gridSizeInDegree, minDistance)
+	grid.SubstractCloseby(gpxMaster, config.GridSizeInDegree, config.MinimumDistance)
+
+	if config.ElevationLookup {
+		for i := range gpxMaster.Waypoints {
+			if gpxMaster.Waypoints[i].Elevation.Null() {
+				CheckElevation(&gpxMaster.Waypoints[i])
+			}
+		}
+	}
+	if config.RenderElevation {
+		for i := range gpxMaster.Waypoints {
+			if gpxMaster.Waypoints[i].Elevation.NotNull() {
+				gpxMaster.Waypoints[i].Name += " (" + strconv.FormatFloat(gpxMaster.Waypoints[i].Elevation.Value(), 'f', 0, 64) + " m)"
+			}
+		}
+	}
 
 	fmt.Printf("GPX Output: %d waypoints.\n", len(gpxMaster.Waypoints))
 
@@ -132,8 +202,7 @@ func main() {
 	// TODO automated split into regions?
 	xmlBytes, err := gpxMaster.ToXml(gpx.ToXmlParams{Version: "1.1", Indent: true})
 	check(err)
-	filenameOutput := os.Args[3]
-	err = os.WriteFile(filenameOutput, xmlBytes, 0666)
+	err = os.WriteFile(outputFile, xmlBytes, 0666)
 	check(err)
 }
 
@@ -177,20 +246,23 @@ func (grid WaypointGrid) AddGPX(gpxFileSlave *gpx.GPX, gridSizeInDegree float64,
 func (grid WaypointGrid) SubstractCloseby(gpxFile *gpx.GPX, gridSizeInDegree float64, maxDistance float64) {
 	deleteIndex := make([]int, 0)
 	for i := range gpxFile.Waypoints {
+		gridWpIsCloseby := false
 		for _, key := range NeighboringGridKeys(gpxFile.Waypoints[i], gridSizeInDegree, maxDistance) {
-			gridWpIsCloseby := false
+			if gridWpIsCloseby {
+				break
+			}
 			for _, gridWaypoint := range grid[key] {
 				if gpxFile.Waypoints[i].Distance2D(&gridWaypoint) < maxDistance {
 					if !(gpxFile.Waypoints[i].Name == gridWaypoint.Name && gpxFile.Waypoints[i].Latitude == gridWaypoint.Latitude && gpxFile.Waypoints[i].Longitude == gridWaypoint.Longitude) {
 						gridWpIsCloseby = true
+						fmt.Printf("Waypoint %s is marked for deletion, as it is too close to %s, \n", gpxFile.Waypoints[i].Name, gridWaypoint.Name)
 						break
 					}
 				}
 			}
-			if gridWpIsCloseby {
-				deleteIndex = append(deleteIndex, i) //				remove gpxFile.Waypoints[i] from list
-				fmt.Printf("Closeby Waypoint removal of %s \n", gpxFile.Waypoints[i].Name)
-			}
+		}
+		if gridWpIsCloseby {
+			deleteIndex = append(deleteIndex, i)
 		}
 	}
 	slices.Sort(deleteIndex)
