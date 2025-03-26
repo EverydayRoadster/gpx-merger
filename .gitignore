@@ -3,3 +3,4 @@ go.work
 .vscode/launch.json
 .DS_Store
 *.zip
+gpx-merger
