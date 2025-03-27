@@ -8,7 +8,7 @@ files:
 
 inputFolder: "../GettingHigh/"
 
-minimumDistance: 600
+minimumDistance: 500
 gridSizeInDegree: 0.5
 
 elevationLookup: false
