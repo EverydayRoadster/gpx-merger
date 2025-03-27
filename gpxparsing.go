@@ -50,7 +50,7 @@ func ParseGpxName(filename string, text string) (*GpxNameParseData, error) {
 // read a GPX file. parse the name of waypoint for known pattern, to derive elevetion data from it and make names a bit more consistent
 func ReadGpxFile(inputDir string, filename string) (*gpx.GPX, error) {
 	var gpxFile *gpx.GPX
-	payload, err := os.ReadFile(inputDir + filename)
+	payload, err := os.ReadFile(GetFilePath(inputDir, filename))
 	if err == nil {
 		gpxFile, err = gpx.ParseBytes(payload)
 	}
@@ -70,7 +70,7 @@ func ReadGpxFile(inputDir string, filename string) (*gpx.GPX, error) {
 
 // get a list of GPX files from input dir, excluding master and output file, in case those would be found in the same dir
 func GetGPXFiles(inputDir string, master string, output string) ([]string, error) {
-	inputDir = strings.TrimRight(inputDir, " /") + "/"
+	inputDir = GetFilePath(inputDir, "")
 	var gpxFiles []string
 	err := filepath.WalkDir(inputDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -82,4 +82,11 @@ func GetGPXFiles(inputDir string, master string, output string) ([]string, error
 		return nil
 	})
 	return gpxFiles, err
+}
+
+func GetFilePath(inputDir string, filename string) string {
+	if len(inputDir) > 0 {
+		filename = strings.TrimRight(inputDir, " /") + "/" + filename
+	}
+	return filename
 }

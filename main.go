@@ -40,11 +40,10 @@ func main() {
 	fmt.Printf("GPX Master: %d waypoints.\n", len(gpxMaster.Waypoints))
 	fmt.Printf("Spatial grid width : %f km, using Euclidean distance calculation!\n", config.GridSizeInDegree*metersPerDegree/1000)
 	check(err)
-	fmt.Printf("Minimum distance between points : %f m.\n", config.MinimumDistance)
+	fmt.Printf("Duplicate points are detected within %.2f m.\n", config.MinimumDistance)
 
 	// grid
 	grid := LoadGrid(gpxMaster.Waypoints, config.GridSizeInDegree)
-	fmt.Printf("Master spatial grid count : %d \n", len(grid))
 
 	gpxFiles, err := GetGPXFiles(config.InputFolder, config.MasterFile, outputFile)
 	check(err)

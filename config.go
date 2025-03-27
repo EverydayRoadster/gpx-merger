@@ -12,11 +12,10 @@ type Config struct {
 	MinimumDistance  float64           `yaml:"minimumDistance"`
 	GridSizeInDegree float64           `yaml:"gridSizeInDegree"`
 	MasterFile       string            `yaml:"master"`
-	Files            map[string]string `yaml:"files"`
 	InputFolder      string            `yaml:"inputFolder"`
+	Files            map[string]string `yaml:"files"`
 	ElevationLookup  bool              `yaml:"elevationLookup"`
 	RenderElevation  bool              `yaml:"renderElevation"`
-	Regexp           map[string]regexp.Regexp
 }
 
 var config Config

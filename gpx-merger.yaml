@@ -6,9 +6,9 @@ files:
   poi_export.gpx: "^(?P<Name>.+)$"
   default: "^(?P<Name>.+)$"
 
-inputFolder: "../GettingHigh/"
+inputFolder: "../GettingHigh"
 
-minimumDistance: 500
+minimumDistance: 480
 gridSizeInDegree: 0.5
 
 elevationLookup: false
