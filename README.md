@@ -2,7 +2,7 @@
 
 Merges waypoints from multile gpx files into one, and removes any duplicate waypoints from the new gpx file. 
 
-Duplicate waypoints are judged by to be located within a configurable distance.
+Duplicate waypoints are judged by their location to each other, within a configurable distance.
 
 Along the way, gpx-merger may clean up names of waypoints into a consistent appearance and may add elevation data to waypoints, where it is missing.
 
