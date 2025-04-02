@@ -9,6 +9,7 @@ Along the way, gpx-merger may clean up names of waypoints into a consistent appe
 Syntax: 
 `gpx-merger <config.yaml> <output.gpx>`
 
+
 ## Use case:
 Collecting waypoints from different sources into your roadtrip planner, this often creates duplicate entries on your map. 
 
@@ -17,6 +18,10 @@ Manually editing out those duplicates is not only time consuming and prone to er
 gpx-merger unitfies all gpx waypoint files from a single directory into one waypoint gpx file, which you may import into your road trip planner as a single source. 
 
 With consolidation to happen outside and before the planner tool, this shields from any unwanted manual labor.
+
+See also (German):
+
+https://www.youtube.com/watch?v=6JsR55I_4tU
 
 ## config.yaml
 
