@@ -1,27 +1,32 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<gpx xmlns:gpxtpx1="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" 
-    xmlns="http://www.topografix.com/GPX/1/1" 
-    xmlns:trp="http://www.garmin.com/xmlschemas/TripExtensions/v1" 
-    xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" 
-    xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v2" version="1.1" creator="EverydayRoadster">
+<gpx xmlns:gpxtpx1="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns="http://www.topografix.com/GPX/1/1" xmlns:trp="http://www.garmin.com/xmlschemas/TripExtensions/v1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v2" version="1.1" creator="RouteConverter 3.2-SNAPSHOT-391">
     <metadata>
         <name>EverydayRoadster's GettingHigh</name>
-        <desc>High road points that are not found elsewhere, or with corrections to such points found elsewhere.</desc>
-        <copyright author="EverydayRoadster">
-          <year>2025</year>
-          <license>https://mit-license.org/</license>
-        </copyright>
+        <desc>High road points that are not found elsewhere,
+or with corrections to such points found elsewhere.</desc>
         <author>
             <name>EverydayRoadster</name>
-            <link href="https://github.com/EverydayRoadster/gpx-merger" />
+            <link href="https://github.com/EverydayRoadster/gpx-merger"/>
         </author>
-        <time>2025-03-25T19:18:49.544Z</time>
+        <copyright author="EverydayRoadster">
+            <year>2025</year>
+            <license>https://mit-license.org/</license>
+        </copyright>
+        <time>2025-04-13T14:27:47.851Z</time>
     </metadata>
     <wpt lat="47.6037629" lon="8.4376095">
         <ele>605.0</ele>
         <time>2025-03-25T19:03:02.147Z</time>
         <name>Kalter Wangen</name>
-        <link href="https://www.youtube.com/watch?v=Udm688L1W3Y"></link>
+        <link href="https://www.youtube.com/watch?v=Udm688L1W3Y"/>
+        <sym>Mountain</sym>
+        <type>Mountainpass</type>
+    </wpt>
+    <wpt lat="47.1864008" lon="9.6748911">
+        <ele>673.0</ele>
+        <time>2024-08-20T12:00:00.000Z</time>
+        <name>Bazulwald</name>
+        <link href="https://www.youtube.com/watch?v=3-5MXRC7amc"/>
         <sym>Mountain</sym>
         <type>Mountainpass</type>
     </wpt>

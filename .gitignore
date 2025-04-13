@@ -4,3 +4,4 @@ go.work
 .DS_Store
 *.zip
 gpx-merger
+output.gpx
