@@ -12,7 +12,7 @@ or with corrections to such points found elsewhere.</desc>
             <year>2025</year>
             <license>https://mit-license.org/</license>
         </copyright>
-        <time>2025-04-13T14:27:47.851Z</time>
+        <time>2025-04-18T20:21:29.948Z</time>
     </metadata>
     <wpt lat="47.6037629" lon="8.4376095">
         <ele>605.0</ele>
@@ -29,5 +29,13 @@ or with corrections to such points found elsewhere.</desc>
         <link href="https://www.youtube.com/watch?v=3-5MXRC7amc"/>
         <sym>Mountain</sym>
         <type>Mountainpass</type>
+    </wpt>
+    <wpt lat="46.8340922" lon="7.8726279">
+        <ele>986.0</ele>
+        <time>2025-03-08T12:00:00.000Z</time>
+        <name>Waldhöhe</name>
+        <link href="https://youtu.be/IqcLh3YZ72c"/>
+        <sym>Saddle</sym>
+        <type>Mountainsaddle</type>
     </wpt>
 </gpx>
